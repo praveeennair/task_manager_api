@@ -1,0 +1,211 @@
+{
+  "info": {
+    "name": "Task Manager REST API",
+    "description": "Postman / Echo API Collection for Task Manager API including CRUD, Natural Language Parsing, Subtasks, Breakdown, and Idempotency testing.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Tasks CRUD",
+      "item": [
+        {
+          "name": "1. Create Task",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Launch Product Feature\",\n  \"description\": \"Finalize backend endpoints and deploy to staging\",\n  \"priority\": \"high\",\n  \"due_date\": \"2026-12-01\",\n  \"completed\": false\n}"
+            },
+            "url": { "raw": "http://localhost:8000/api/tasks/", "protocol": "http", "host": ["localhost"], "port": "8000", "path": ["api", "tasks", ""] }
+          }
+        },
+        {
+          "name": "2. Create Task with Idempotency Key",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "task-create-safe-retry-001" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Schedule Team Sync\",\n  \"description\": \"Quarterly planning and retrospective discussion\",\n  \"priority\": \"medium\",\n  \"completed\": false\n}"
+            },
+            "url": { "raw": "http://localhost:8000/api/tasks/", "protocol": "http", "host": ["localhost"], "port": "8000", "path": ["api", "tasks", ""] }
+          }
+        },
+        {
+          "name": "3. Create Task - Validation Error (Empty Title)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"   \",\n  \"description\": \"Missing title test\"\n}"
+            },
+            "url": { "raw": "http://localhost:8000/api/tasks/", "protocol": "http", "host": ["localhost"], "port": "8000", "path": ["api", "tasks", ""] }
+          }
+        },
+        {
+          "name": "4. Create Task - Validation Error (Invalid Date 2026-02-30)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Bad Date Task\",\n  \"description\": \"Testing impossible date\",\n  \"due_date\": \"2026-02-30\"\n}"
+            },
+            "url": { "raw": "http://localhost:8000/api/tasks/", "protocol": "http", "host": ["localhost"], "port": "8000", "path": ["api", "tasks", ""] }
+          }
+        },
+        {
+          "name": "5. List Tasks (Combined Filter, Search, Order, Pagination)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:8000/api/tasks/?completed=false&priority=high&search=Product&ordering=-due_date&page=1&page_size=10",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8000",
+              "path": ["api", "tasks", ""],
+              "query": [
+                { "key": "completed", "value": "false" },
+                { "key": "priority", "value": "high" },
+                { "key": "search", "value": "Product" },
+                { "key": "ordering", "value": "-due_date" },
+                { "key": "page", "value": "1" },
+                { "key": "page_size", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "6. Retrieve Task by ID",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "http://localhost:8000/api/tasks/1/", "protocol": "http", "host": ["localhost"], "port": "8000", "path": ["api", "tasks", "1", ""] }
+          }
+        },
+        {
+          "name": "7. Retrieve Task - 404 Not Found",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "http://localhost:8000/api/tasks/99999/", "protocol": "http", "host": ["localhost"], "port": "8000", "path": ["api", "tasks", "99999", ""] }
+          }
+        },
+        {
+          "name": "8. Update Task (PATCH)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"completed\": true\n}"
+            },
+            "url": { "raw": "http://localhost:8000/api/tasks/1/", "protocol": "http", "host": ["localhost"], "port": "8000", "path": ["api", "tasks", "1", ""] }
+          }
+        },
+        {
+          "name": "9. Delete Task",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "http://localhost:8000/api/tasks/1/", "protocol": "http", "host": ["localhost"], "port": "8000", "path": ["api", "tasks", "1", ""] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Natural Language Parsing",
+      "item": [
+        {
+          "name": "1. Create Task From Text (Rent Example)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Remind me to pay rent on the 1st of every month\"\n}"
+            },
+            "url": { "raw": "http://localhost:8000/api/tasks/from-text/", "protocol": "http", "host": ["localhost"], "port": "8000", "path": ["api", "tasks", "from-text", ""] }
+          }
+        },
+        {
+          "name": "2. Create Task From Text (Urgent Tomorrow)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "from-text-key-002" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Submit final budget report tomorrow urgent\"\n}"
+            },
+            "url": { "raw": "http://localhost:8000/api/tasks/from-text/", "protocol": "http", "host": ["localhost"], "port": "8000", "path": ["api", "tasks", "from-text", ""] }
+          }
+        },
+        {
+          "name": "3. Create Task From Text - Empty Text Error",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"   \"\n}"
+            },
+            "url": { "raw": "http://localhost:8000/api/tasks/from-text/", "protocol": "http", "host": ["localhost"], "port": "8000", "path": ["api", "tasks", "from-text", ""] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Subtasks & Breakdown",
+      "item": [
+        {
+          "name": "1. Create Subtask for Task",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Design ER Diagram\",\n  \"description\": \"Draft database schema relationships\",\n  \"priority\": \"high\"\n}"
+            },
+            "url": { "raw": "http://localhost:8000/api/tasks/1/subtasks/", "protocol": "http", "host": ["localhost"], "port": "8000", "path": ["api", "tasks", "1", "subtasks", ""] }
+          }
+        },
+        {
+          "name": "2. List Subtasks for Task",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "http://localhost:8000/api/tasks/1/subtasks/", "protocol": "http", "host": ["localhost"], "port": "8000", "path": ["api", "tasks", "1", "subtasks", ""] }
+          }
+        },
+        {
+          "name": "3. Breakdown Task Atomically",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Idempotency-Key", "value": "breakdown-key-001" }
+            ],
+            "url": { "raw": "http://localhost:8000/api/tasks/1/breakdown/", "protocol": "http", "host": ["localhost"], "port": "8000", "path": ["api", "tasks", "1", "breakdown", ""] }
+          }
+        }
+      ]
+    }
+  ]
+}

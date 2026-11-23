@@ -1,0 +1,509 @@
+openapi: 3.0.3
+info:
+  title: Task Manager REST API
+  description: |
+    REST API supporting natural language task creation, automatic task breakdown,
+    subtasks hierarchy, safe retries (idempotency), consistent error responses, and robust filtering.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8000/api
+    description: Local Docker Development Server
+
+paths:
+  /tasks/:
+    get:
+      summary: List and filter tasks
+      description: Retrieve paginated list of tasks supporting combined filtering, search, and ordering.
+      parameters:
+        - name: completed
+          in: query
+          description: Filter by completion status (true/false)
+          required: false
+          schema:
+            type: boolean
+        - name: priority
+          in: query
+          description: Filter by priority (low, medium, high)
+          required: false
+          schema:
+            type: string
+            enum: [low, medium, high]
+        - name: due_date
+          in: query
+          description: Filter by exact due date (YYYY-MM-DD)
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: search
+          in: query
+          description: Search keywords in title and description
+          required: false
+          schema:
+            type: string
+        - name: ordering
+          in: query
+          description: Ordering field (due_date, created_at, priority, title). Prefix '-' for descending.
+          required: false
+          schema:
+            type: string
+        - name: page
+          in: query
+          description: Page number
+          required: false
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          description: Number of items per page
+          required: false
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: Paginated list of tasks
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTaskList'
+
+    post:
+      summary: Create a new task
+      description: Creates a new top-level or subtask. Supports optional Idempotency-Key header.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          description: Optional client-generated UUID/key to guarantee idempotent safe retries.
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskInput'
+      responses:
+        '201':
+          description: Task created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Idempotency key already used with a different request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /tasks/{id}/:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Unique identifier of the task
+        schema:
+          type: integer
+    get:
+      summary: Retrieve task by ID
+      responses:
+        '200':
+          description: Task details with nested subtasks
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '404':
+          description: Task not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      summary: Full update of task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskInput'
+      responses:
+        '200':
+          description: Task updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Task not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    patch:
+      summary: Partial update of task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                completed:
+                  type: boolean
+                priority:
+                  type: string
+                  enum: [low, medium, high]
+                due_date:
+                  type: string
+                  format: date
+      responses:
+        '200':
+          description: Task updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Task not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: Delete task
+      description: Deletes task. Automatically cascades deletion to all child subtasks.
+      responses:
+        '204':
+          description: Task deleted successfully
+        '404':
+          description: Task not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /tasks/from-text/:
+    post:
+      summary: Create task from natural language text
+      description: |
+        Parses natural language text into a structured task.
+        Extracts title, description, due date (e.g. 'tomorrow', 'on the 1st'), priority, and recurrence.
+        All parser output is validated through TaskSerializer before saving (never trust parser output).
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          description: Optional idempotency key for safe retries
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - text
+              properties:
+                text:
+                  type: string
+                  example: "Remind me to pay rent on the 1st of every month"
+                use_llm:
+                  type: boolean
+                  default: false
+      responses:
+        '201':
+          description: Task parsed and created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          description: Validation error (e.g. empty text)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Idempotency conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Bad gateway (Parser returned invalid task or raised exception)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Service unavailable (LLM requested but LLM_API_KEY is not configured)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /tasks/{id}/subtasks/:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Parent task ID
+        schema:
+          type: integer
+    get:
+      summary: List subtasks of a parent task
+      responses:
+        '200':
+          description: List of subtasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SubtaskSummary'
+        '404':
+          description: Parent task not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      summary: Create a subtask under parent task
+      description: A task that is itself a subtask cannot be given subtasks.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskInput'
+      responses:
+        '201':
+          description: Subtask created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          description: Validation error or subtask nesting violation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Parent task not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /tasks/{id}/breakdown/:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Parent task ID
+        schema:
+          type: integer
+    post:
+      summary: Automatically break down a task into subtasks
+      description: |
+        Splits a parent task into actionable subtasks. All subtasks are validated first.
+        Saves all atomically; if any item is invalid, none are saved.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          description: Optional idempotency key for safe retries
+          required: false
+          schema:
+            type: string
+      responses:
+        '201':
+          description: Subtasks created
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SubtaskSummary'
+        '400':
+          description: Breakdown validation error or task is already a subtask
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Task not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    TaskInput:
+      type: object
+      required:
+        - title
+        - description
+      properties:
+        title:
+          type: string
+          example: "Draft Project Proposal"
+        description:
+          type: string
+          example: "Create technical architecture and timeline estimate"
+        completed:
+          type: boolean
+          default: false
+        priority:
+          type: string
+          enum: [low, medium, high]
+          default: medium
+        due_date:
+          type: string
+          format: date
+          example: "2026-12-15"
+        recurrence:
+          type: string
+          nullable: true
+
+    SubtaskSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        completed:
+          type: boolean
+        due_date:
+          type: string
+          format: date
+          nullable: true
+        priority:
+          type: string
+        parent:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Task:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        completed:
+          type: boolean
+        due_date:
+          type: string
+          format: date
+          nullable: true
+        priority:
+          type: string
+        recurrence:
+          type: string
+          nullable: true
+        parent:
+          type: integer
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        subtasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/SubtaskSummary'
+
+    PaginatedTaskList:
+      type: object
+      properties:
+        count:
+          type: integer
+          example: 45
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Task'
+
+    ErrorDetail:
+      type: object
+      properties:
+        field:
+          type: string
+          example: "title"
+        issue:
+          type: string
+          example: "must not be empty"
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+            - details
+          properties:
+            code:
+              type: string
+              example: "VALIDATION_ERROR"
+            message:
+              type: string
+              example: "Validation failed"
+            details:
+              type: array
+              items:
+                $ref: '#/components/schemas/ErrorDetail'
